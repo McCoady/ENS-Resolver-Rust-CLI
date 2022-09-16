@@ -9,29 +9,33 @@ async fn main() {
     let file_path = &args[1];
     let rpc_url = &args[2];
 
-    let mut count = 0;
+    let mut addresses: Vec<ethers::prelude::H160> = Vec::new();
 
-    println!("[");
-
-    let addresses = fs::read_to_string(file_path).unwrap();
-    for address in addresses.split_ascii_whitespace() {
-        let res = get_address(address, &rpc_url);
-        block_on(res);
-        count += 1;
+    let ens_names = fs::read_to_string(file_path).unwrap();
+    for ens_name in ens_names.split_ascii_whitespace() {
+        let res = get_address(ens_name, &rpc_url);
+        let _result = match block_on(res) {
+            Ok(res) => addresses.push(res),
+            Err(_) => eprintln!("{ens_name} : UNRESOLVED"),
+        };
     }
-    println!("]");
-    eprintln!("{} addresses", count);
+
+    if env::var("REMOVE_DUP").is_ok() {
+        addresses.sort();
+        addresses.dedup();
+    }
+    eprintln!("{:?} addresses", addresses.len());
+    for address in addresses {
+        println!("{:?}", address);
+    }
 }
 
-async fn get_address(name: &str, rpc: &String) {
+async fn get_address(
+    name: &str,
+    rpc: &String,
+) -> Result<ethers::prelude::H160, ethers::providers::ProviderError> {
     let provider = Provider::<Http>::try_from(rpc).expect("Problem connecting to provider");
     let address_result = provider.resolve_name(name).await;
 
-    let _address = match address_result {
-        Ok(res) => println!("{:?},", res),
-        Err(_) => eprintln!("{name} : UNRESOLVED"),
-    };
+    address_result
 }
-
-// allow separate by something other than space
-// errors for non addresses
